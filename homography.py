@@ -137,16 +137,12 @@ def visualize_transformation(im, hom, height, width, file_name, thickness=5):
     """
 
     # Compute the corner points
-
-    c1 = hom.dot(np.array([1,1,1]))[:2]
-    c2 = hom.dot(np.array([width,1,1]))[:2]
-    c3 = hom.dot(np.array([1,height,1]))[:2]
-    c4 = hom.dot(np.array([width,height,1]))[:2]
     pts = np.float32([ [0,0],[0,height-1],[width-1,height-1],[width-1,0] ]).reshape(-1,1,2)
     transf = cv2.perspectiveTransform(pts, hom)
-    print transf
+    # Turn to int since we're going to be drawing lines
     transf = (transf + 0.5).astype(int)
     transf = transf[:, 0, :]
+
     # Add lines to image
     im = cv2.line(im, tuple(transf[0, :]), tuple(transf[1, :]), (255,0,0), thickness)
     im = cv2.line(im, tuple(transf[1, :]), tuple(transf[2, :]), (255,0,0), thickness)
