@@ -85,7 +85,7 @@ def estimate_homography(rdesc, rfeat, tdesc, tfeat, num_iters=100, thresh=3.0):
         tdesc: matrix of # of keypoints x dimensionality of descriptor with descriptors for each feature in test
         tfeat: matrix of # of keypoints x 2, values are x,y of each feature for test
         num_iters: number of iterations of ransac to run
-        thres: threshold for distance for a projection to be considered an inlier
+        thres: threshold for distance for a projection to be considered an inlier. Default is 3.0 as in opencv
 
     returns:
         best_in: The number of inliers found from the best trnasformation
@@ -125,3 +125,31 @@ def estimate_homography(rdesc, rfeat, tdesc, tfeat, num_iters=100, thresh=3.0):
 
     return best_in, best_hom
 
+
+def visualize_transformation(im, hom, height, width, file_name, thickness=5):
+    """ Visualize the homography transformation by taking the dvd cover and localizing it on test image.
+    args
+        im: test image to overlay bounding box on
+        hom: 3x3 homography transformation matrix
+        height: height of dvd cover
+        width: width of dvd cover
+        file_name: file to write resulting image to
+    """
+
+    # Compute the corner points
+
+    c1 = hom.dot(np.array([1,1,1]))[:2]
+    c2 = hom.dot(np.array([width,1,1]))[:2]
+    c3 = hom.dot(np.array([1,height,1]))[:2]
+    c4 = hom.dot(np.array([width,height,1]))[:2]
+    pts = np.float32([ [0,0],[0,height-1],[width-1,height-1],[width-1,0] ]).reshape(-1,1,2)
+    transf = cv2.perspectiveTransform(pts, hom)
+    print transf
+    transf = (transf + 0.5).astype(int)
+    transf = transf[:, 0, :]
+    # Add lines to image
+    im = cv2.line(im, tuple(transf[0, :]), tuple(transf[1, :]), (255,0,0), thickness)
+    im = cv2.line(im, tuple(transf[1, :]), tuple(transf[2, :]), (255,0,0), thickness)
+    im = cv2.line(im, tuple(transf[2, :]), tuple(transf[3, :]), (255,0,0), thickness)
+    im = cv2.line(im, tuple(transf[3, :]), tuple(transf[0, :]), (255,0,0), thickness)
+    cv2.imwrite(file_name, im)
