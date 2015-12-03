@@ -2,6 +2,7 @@ from sklearn.cluster import KMeans, MiniBatchKMeans
 import cv2
 import numpy as np
 import scipy.spatial.distance
+from collections import Counter
 import os
 import pickle
 
@@ -13,8 +14,10 @@ class VocabTree:
     k: branching factor of tree
     L: maximum depth of the tree
     root: root node of linked structure
+    norm_ord: The order of the norm to use - generally either L1 or L2
+    db_scores: number of images in database x number of nodes in tree matrix of score vectors for each training image
     """
-    def __init__(self, descs, labels, images, k=10, L=5):
+    def __init__(self, descs, labels, images, k=10, L=5, norm_ord=1):
         """
 
         :param descs: # of descs x 128 matrix of descriptors
@@ -27,8 +30,19 @@ class VocabTree:
         self.images = images
         self.k = k
         self.L = L
-        # Construct the actual tree, form the root node
-        self.root = Node(descs, labels, 0, 0, k, L, len(images))
+        self.norm_ord = norm_ord
+
+        # Empty list to populate for precomputing scores
+        pre_scores = []
+        # Construct the actual tree, from the root node
+        self.root = Node(descs, labels, 0, 0, k, L, len(images), pre_scores)
+
+        # Get our matrix of database scores
+        self.db_scores = np.array(pre_scores).T
+
+        # Nomralize database scores
+        self.db_scores = self.db_scores / np.linalg.norm(self.db_scores, ord=norm_ord, axis=1)[:, None]
+
 
 
     def get_image_score_vec(self, descs):
@@ -46,7 +60,32 @@ class VocabTree:
         # Score
         self.root.compute_score_vector(descs, score)
 
+        # Normalize
+        score = score / np.linalg.norm(score, ord=self.norm_ord)
+
         return score
+
+    def get_most_similar(self, descs, n=10):
+        """
+
+        :param descs: # of descriptors x 128 matrix of descriptors in query image
+        :param n: top n hits will be returned
+
+        :return:
+            top_images: A list of the names of the top n matches
+        """
+
+        # Get our query score vector
+        score_vec = self.get_image_score_vec(descs)
+
+        # Compute normed distance from query to each db entry
+        dists = np.linalg.norm(score_vec[None, :] - self.db_scores, ord=self.norm_ord, axis=1)
+
+        # Get the ordering of distances, get top n
+        ordering = np.argsort(dists)
+        top_images = [self.images[ordering[i]] for i in range(n)]
+
+        return top_images
 
 
 class Node:
@@ -59,8 +98,10 @@ class Node:
     children: a list of k children nodes, parallel to the first axis of centers
     max_index: the max index this node or any of its children has
     """
-    def __init__(self, descs, labels, index, depth, k, L, db_im_size):
+    def __init__(self, descs, labels, index, depth, k, L, db_im_size, pre_scores):
         """
+        Create this node with given parameters, and recursively create children using k-means. You can
+        think of this as being a root of a tree with height at most L-depth and branching factor k.
 
         :param descs: # of descriptors x 128 matrix, rows parallel with labels, descriptors that go into this node
         :param labels: # of descriptors x,  aligned labels for which image index each descriptor comes from
@@ -69,6 +110,8 @@ class Node:
         :param k: The branching factor of the tree
         :param L: The max depth of the tree
         :param db_im_size: The number of images in the database
+        :param pre_scores: List with a vector per node, with scores for each training image. Used for precomputing
+            scores. Root should be given an empty list here.
 
         """
         if index % 1000 == 0:
@@ -81,6 +124,18 @@ class Node:
         # Compute the weight of this node as ln(N/N_i)
         n_i = len(set(labels))
         self.weight = np.log(float(db_im_size) / float(n_i))
+
+        # First, assert that our indices haven't gotten out of order
+        assert len(pre_scores) == index
+
+        # Now compute this nodes vector of scores
+        node_scores = np.zeros(db_im_size)
+        counts = Counter(labels)
+        for i in range(db_im_size):
+            node_scores[i] += self.weight * counts[i]
+
+        # Finally, add to the list
+        pre_scores.append(node_scores)
 
         # If we've reached the depth cap, or there aren't enough descriptors, this is a leaf node and there's no work
         if depth == L or labels.shape[0] < k:
@@ -111,7 +166,7 @@ class Node:
             branch_descs = descs[branches==i, :]
             branch_labels = labels[branches==i]
             # Create the new node
-            branch = Node(branch_descs, branch_labels, index, depth + 1, k, L, db_im_size)
+            branch = Node(branch_descs, branch_labels, index, depth + 1, k, L, db_im_size, pre_scores)
             self.children.append(branch)
             # Keep track of our index properly
             index = branch.max_index
@@ -137,7 +192,7 @@ class Node:
 
         # Figure out how to split the data
         dists = scipy.spatial.distance.cdist(descs, self.centers)
-        labels = np.argmax(dists, axis=1)
+        labels = np.argmin(dists, axis=1)
 
         # Get scores for children
         for i, n in enumerate(self.children):
@@ -160,12 +215,18 @@ if __name__ == '__main__':
     # labels = np.array(labels)
     # pickle.dump((descs, labels, images), open('siftstuff.pkl', 'wb'))
     descs, labels, images = pickle.load(open('siftstuff.pkl', 'rb'))
+    print min(labels)
+    print max(labels)
     print 'done loading!'
     vt = VocabTree(descs, labels, images, L=2)
     test_image = cv2.imread('test/image_01.jpeg')
     gray = cv2.cvtColor(test_image, cv2.COLOR_BGR2GRAY)
     _, desc = sift.detectAndCompute(gray, None)
-    print vt.get_image_score_vec(desc)
+    print vt.get_most_similar(desc)
+    first_image = cv2.imread('DVDcovers/' + images[0])
+    gray = cv2.cvtColor(first_image, cv2.COLOR_BGR2GRAY)
+    _, desc = sift.detectAndCompute(gray, None)
+    print vt.db_scores.shape
     # print root.max_index
     print labels.shape
     print descs.shape
