@@ -6,11 +6,10 @@ import scipy.spatial.distance
 def do_matching(rdesc, tdesc):
     """ For each descriptor in rdesc, find the best matching descriptor in tdesc, and
     only include the ones satisfying Lowe's criteria (ratio of second to first best <0.7)
-    args:
-        rdesc: matrix of # of keypoints x dimensionality of descriptor with descriptors for each feature in reference
-        tdesc: matrix of # of keypoints x dimensionality of descriptor with descriptors for each feature in test
+    :param rdesc: matrix of # of keypoints in ref x 128 for each feature in reference
+    :param tdesc: matrix of # of keypoints in test x 128 with descriptors for each feature in test
 
-    returns:
+    :return:
         rmat: indices for matches in reference, parallel to test matches
         tmat: indices for matches in test, parallel to reference matches
     """
@@ -33,11 +32,10 @@ def do_matching(rdesc, tdesc):
 
 def compute_homography(rfeat, tfeat):
     """ Given 4 matches tfeat and rfeat, compute solution for homography transformation
-    args:
-        rfeat: 4 x 2 matrix, values are x,y of each feature for reference matched to each feature in test in parallel
-        tfeat: 4 x 2 matrix, values are x,y of each feature for test matched to each feature in reference in parallel
+    :param rfeat: 4 x 2 matrix, values are x,y of each feature for reference matched to each feature in test in parallel
+    :param tfeat: 4 x 2 matrix, values are x,y of each feature for test matched to each feature in reference in parallel
 
-    returns:
+    :return:
         hom: the resulting transformation computed
     """
 
@@ -64,30 +62,24 @@ def compute_homography(rfeat, tfeat):
         A[2*i+1, 7] = -yr * yt
         A[2*i+1, 8] = -yt
 
-    # Compute eigenvalues and eigenvectors
-    vals, vecs = np.linalg.eig(A.T.dot(A))
-    min_val = np.argmin(vals)
-    min_vec = vecs[:, min_val]
-
     # Normalize so that h_33 = 1, since we can only get h up to a scale factor
     # TECHINCALLY this assumption can fail if h_33 = 0, but this should be an edge case we can reasonably ignore
-    min_vec = min_vec / min_vec[-1]
-
-    return min_vec.reshape(3,3)
+    u, s, v = np.linalg.svd(A)
+    return v[-1, :].reshape(3,3) / v[-1, -1]
+    #return min_vec.reshape(3,3)
 
 
 
 def estimate_homography(rdesc, rfeat, tdesc, tfeat, num_iters=100, thresh=3.0):
     """ Estimate homography transformation from reference to test using RANSAC.
-    args:
-        rdesc: matrix of # of keypoints x dimensionality of descriptor with descriptors for each feature in reference
-        rfeat: matrix of # of keypoints x 2, values are x,y of each feature for reference
-        tdesc: matrix of # of keypoints x dimensionality of descriptor with descriptors for each feature in test
-        tfeat: matrix of # of keypoints x 2, values are x,y of each feature for test
-        num_iters: number of iterations of ransac to run
-        thres: threshold for distance for a projection to be considered an inlier. Default is 3.0 as in opencv
+    :param rdesc: matrix of # of keypoints x 128 with descriptors for each feature in reference
+    :param rfeat: matrix of # of keypoints x 2, values are x,y of each feature for reference
+    :param tdesc: matrix of # of keypoints x 128 with descriptors for each feature in test
+    :param tfeat: matrix of # of keypoints x 2, values are x,y of each feature for test
+    :param num_iters: number of iterations of ransac to run
+    :param thres: threshold for distance for a projection to be considered an inlier. Default is 3.0 as in opencv
 
-    returns:
+    :return:
         best_in: The number of inliers found from the best trnasformation
         best_hom: The actual homography transformation matrix
     """
@@ -129,11 +121,11 @@ def estimate_homography(rdesc, rfeat, tdesc, tfeat, num_iters=100, thresh=3.0):
 def visualize_transformation(im, hom, height, width, file_name, thickness=5):
     """ Visualize the homography transformation by taking the dvd cover and localizing it on test image.
     args
-        im: test image to overlay bounding box on
-        hom: 3x3 homography transformation matrix
-        height: height of dvd cover
-        width: width of dvd cover
-        file_name: file to write resulting image to
+    :param im: test image to overlay bounding box on
+    :param hom: 3x3 homography transformation matrix
+    :param height: height of dvd cover
+    :param width: width of dvd cover
+    :param file_name: file to write resulting image to
     """
 
     # Compute the corner points
