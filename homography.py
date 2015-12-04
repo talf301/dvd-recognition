@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import scipy.spatial.distance
+import cProfile
 """ This file contains all functionality surrounding doing homography estimation. """
 
 def do_matching(rdesc, tdesc):
@@ -94,21 +95,42 @@ def estimate_homography(rdesc, rfeat, tdesc, tfeat, num_iters=100, thresh=3.0):
         samples = []
         inds = list(range(len(tmat)))
         for j in range(4):
+            # If ther eare no matches, stop
+            if len(inds) == 0:
+                return best_in, best_hom
             samples.append(np.random.choice(inds))
             inds = [x for x in inds if not tmat[x] == tmat[samples[j]]]
 
         # Compute the sampled homography
         hom = compute_homography(rfeat[rmat[samples], :], tfeat[tmat[samples], :])
 
-        # Count inliers
-        inliers = 0
-        for j in range(rmat.shape[0]):
-            ref_xy = rfeat[rmat[j], :]
-            test_xy = tfeat[tmat[j], :]
-            # Compute transformed coordinates
-            res_trans = hom.dot(np.array([ref_xy[0], ref_xy[1], 1]))
-            if scipy.spatial.distance.cdist(test_xy[None, :], res_trans[None, :2]) < thresh:
-                inliers += 1
+        # Transform all of our points
+        res_trans = cv2.perspectiveTransform(rfeat[rmat, :].reshape(-1, 1, 2), hom)
+        # print res_trans.shape
+
+        ref_xy = rfeat[rmat[0], :]
+        res_trans1 = cv2.perspectiveTransform(ref_xy[:, None].reshape(-1, 1, 2), hom)
+        # print res_trans1[0][0]
+        # print res_trans[0,0,:]
+        # Compute distances
+        x = tfeat[tmat, :]
+        y = res_trans[:, 0, :]
+        # dists = np.diag(scipy.spatial.distance.cdist(tfeat[tmat, :], res_trans[:, 0, :]))
+        dists = np.sqrt(np.power(x-y, 2).sum(axis=1))
+
+        # Get inlier count
+        inliers = sum(dists < thresh)
+
+
+        # inliers = 0
+        # for j in range(rmat.shape[0]):
+        #     ref_xy = rfeat[rmat[j], :]
+        #     test_xy = tfeat[tmat[j], :]
+        #     # Compute transformed coordinates
+        #     res_trans = cv2.perspectiveTransform(ref_xy[:, None].reshape(-1, 1, 2), hom)
+        #     # print res_trans[0][0]
+        #     if scipy.spatial.distance.cdist(test_xy[None, :], res_trans[0][0][None, :]) < thresh:
+        #         inliers += 1
 
         # Check if best
         if inliers > best_in:
@@ -141,3 +163,26 @@ def visualize_transformation(im, hom, height, width, file_name, thickness=5):
     im = cv2.line(im, tuple(transf[2, :]), tuple(transf[3, :]), (255,0,0), thickness)
     im = cv2.line(im, tuple(transf[3, :]), tuple(transf[0, :]), (255,0,0), thickness)
     cv2.imwrite(file_name, im)
+
+if __name__ == '__main__':
+    img = cv2.imread('test/image_01.jpeg')
+    #img = cv2.imread('/Users/tal/Dropbox/School/Y4S1/CSC420/Assignment3/data/11.jpg')
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    img2 = cv2.imread('DVDcovers/shrek2.jpg')
+    #img2 = cv2.imread('/Users/tal/Dropbox/School/Y4S1/CSC420/Assignment3/data/toy.jpg')
+    gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+    sift = cv2.xfeatures2d.SIFT_create()
+    kp2, tdesc = sift.detectAndCompute(gray, None)
+    kp1, rdesc = sift.detectAndCompute(gray2, None)
+    print rdesc.shape
+    print len(kp1)
+    print len(kp2)
+    rfeat = np.array([k.pt for k in kp1])
+    tfeat = np.array([k.pt for k in kp2])
+    cProfile.run('estimate_homography(rdesc, rfeat, tdesc, tfeat, num_iters=100)')
+    rmat, tmat = do_matching(rdesc, tdesc)
+    print rmat.shape
+
+
+    # visualize_transformation(img, hom, img2.shape[0], img2.shape[1], 'tes_visualization.jpeg')

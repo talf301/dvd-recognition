@@ -7,8 +7,7 @@ if __name__ == '__main__':
     #img = cv2.imread('/Users/tal/Dropbox/School/Y4S1/CSC420/Assignment3/data/11.jpg')
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
-    #img2 = cv2.imread('DVDcovers/shrek2.jpg')
-    img2 = cv2.imread('DVDcovers/007_tomorrow_never_dies.jpg')
+    img2 = cv2.imread('DVDcovers/shrek2.jpg')
     #img2 = cv2.imread('/Users/tal/Dropbox/School/Y4S1/CSC420/Assignment3/data/toy.jpg')
     gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
     sift = cv2.xfeatures2d.SIFT_create()
@@ -19,7 +18,7 @@ if __name__ == '__main__':
     print len(kp2)
     rfeat = np.array([k.pt for k in kp1])
     tfeat = np.array([k.pt for k in kp2])
-    inliers, hom = homography.estimate_homography(rdesc, rfeat, tdesc, tfeat, num_iters=1000, thresh=5.0)
+    inliers, hom = homography.estimate_homography(rdesc, rfeat, tdesc, tfeat, num_iters=1000)
     rmat, tmat = homography.do_matching(rdesc, tdesc)
     print rmat.shape
 
