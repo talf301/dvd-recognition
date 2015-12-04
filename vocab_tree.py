@@ -43,8 +43,6 @@ class VocabTree:
         # Nomralize database scores
         self.db_scores = self.db_scores / np.linalg.norm(self.db_scores, ord=norm_ord, axis=1)[:, None]
 
-
-
     def get_image_score_vec(self, descs):
         """
 
@@ -67,6 +65,7 @@ class VocabTree:
 
     def get_most_similar(self, descs, n=10):
         """
+        Gets the top n database images most similar to the query image described by descs
 
         :param descs: # of descriptors x 128 matrix of descriptors in query image
         :param n: top n hits will be returned
@@ -86,6 +85,33 @@ class VocabTree:
         top_images = [self.images[ordering[i]] for i in range(n)]
 
         return top_images
+
+    def dump(self, filename):
+        """
+        Dump this vocab tree into a file via pickling
+
+        :param filename: Name of the file in which to dump
+        """
+
+        dump_file = open(filename, 'wb')
+        pickle.dump(self, dump_file)
+        dump_file.close()
+
+    @staticmethod
+    def load_from_file(filename):
+        """
+        Read in a previously dumped vocab tree from a pickled file
+
+        :param filename: Name of the file from which to load
+
+        :return:
+            vt: The vocabulary tree read from file
+        """
+
+        load_file = open(filename, 'rb')
+        vt = pickle.load(load_file)
+        load_file.close()
+        return vt
 
 
 class Node:
@@ -215,18 +241,20 @@ if __name__ == '__main__':
     # labels = np.array(labels)
     # pickle.dump((descs, labels, images), open('siftstuff.pkl', 'wb'))
     descs, labels, images = pickle.load(open('siftstuff.pkl', 'rb'))
-    print min(labels)
-    print max(labels)
+    # print min(labels)
+    # print max(labels)
     print 'done loading!'
     vt = VocabTree(descs, labels, images, L=2)
+    vt.dump('vt.pkl')
+    vt = VocabTree.load_from_file('vt.pkl')
     test_image = cv2.imread('test/image_01.jpeg')
     gray = cv2.cvtColor(test_image, cv2.COLOR_BGR2GRAY)
     _, desc = sift.detectAndCompute(gray, None)
     print vt.get_most_similar(desc)
-    first_image = cv2.imread('DVDcovers/' + images[0])
-    gray = cv2.cvtColor(first_image, cv2.COLOR_BGR2GRAY)
-    _, desc = sift.detectAndCompute(gray, None)
+    # first_image = cv2.imread('DVDcovers/' + images[0])
+    # gray = cv2.cvtColor(first_image, cv2.COLOR_BGR2GRAY)
+    # _, desc = sift.detectAndCompute(gray, None)
     print vt.db_scores.shape
     # print root.max_index
-    print labels.shape
-    print descs.shape
+    # print labels.shape
+    # print descs.shape
