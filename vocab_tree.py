@@ -25,6 +25,7 @@ class VocabTree:
         :param images: list of image names, aligned to image indices
         :param k: The branching factor of the tree
         :param L: The max depth of the tree
+        :param norm_ord: The order of the norm to use
         """
 
         self.images = images
@@ -111,6 +112,46 @@ class VocabTree:
         load_file = open(filename, 'rb')
         vt = pickle.load(load_file)
         load_file.close()
+        return vt
+
+    @classmethod
+    def build_from_directory(cls, directory, k=10, L=5, norm_ord=1):
+        """
+        Build a vocabulary tree using all jpg images from a training directory
+
+        :param directory: The training directory to look in
+        :param k: The branching factor of the tree
+        :param L: The max depth of the tree
+        :param norm_ord: The order of the norm to use
+
+        :return:
+            vt: The resulting VocabTree
+        """
+
+        # Get sift feature detector
+        sift = cv2.xfeatures2d.SIFT_create()
+
+        # Load all .jpg files
+        images = [x for x in os.listdir(directory) if x.endswith('.jpg')]
+
+        # Set up labels and descriptors
+        labels = []
+        descs = np.zeros((0, 128))
+
+        for i, image in enumerate(images):
+            # Load image
+            img = cv2.imread(directory + os.sep + image)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            # Compute features and add them
+            _, desc = sift.detectAndCompute(gray, None)
+            descs = np.vstack((descs, desc))
+            labels.extend([i] * desc.shape[0])
+
+        labels = np.array(labels)
+
+        # Build tree
+        vt = VocabTree(descs, labels, images, k=k, L=L, norm_ord=norm_ord)
+
         return vt
 
 
@@ -227,26 +268,8 @@ class Node:
 if __name__ == '__main__':
     sift = cv2.xfeatures2d.SIFT_create()
     train_dir = 'DVDcovers'
-    # images = [x for x in os.listdir(train_dir) if x.endswith('.jpg')]
-    # labels = []
-    # descs = np.zeros((0, 128))
-    # for i, image in enumerate(images):
-    #     img = cv2.imread(train_dir + os.sep + image)
-    #     print img.shape
-    #     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    #     _, desc = sift.detectAndCompute(gray, None)
-    #     descs = np.vstack((descs, desc))
-    #     labels.extend([i] * desc.shape[0])
-    #
-    # labels = np.array(labels)
-    # pickle.dump((descs, labels, images), open('siftstuff.pkl', 'wb'))
-    descs, labels, images = pickle.load(open('siftstuff.pkl', 'rb'))
-    # print min(labels)
-    # print max(labels)
-    print 'done loading!'
-    vt = VocabTree(descs, labels, images, L=2)
-    vt.dump('vt.pkl')
-    vt = VocabTree.load_from_file('vt.pkl')
+    vt = VocabTree.build_from_directory(train_dir, L=2)
+    print "Built tree!"
     test_image = cv2.imread('test/image_01.jpeg')
     gray = cv2.cvtColor(test_image, cv2.COLOR_BGR2GRAY)
     _, desc = sift.detectAndCompute(gray, None)
