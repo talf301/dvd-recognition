@@ -1,3 +1,4 @@
+from homography import estimate_homography, visualize_transformation
 from sklearn.cluster import KMeans, MiniBatchKMeans
 import cv2
 import numpy as np
@@ -268,12 +269,42 @@ class Node:
 if __name__ == '__main__':
     sift = cv2.xfeatures2d.SIFT_create()
     train_dir = 'DVDcovers'
-    vt = VocabTree.build_from_directory(train_dir, L=2)
-    print "Built tree!"
-    test_image = cv2.imread('test/image_01.jpeg')
+    # vt = VocabTree.build_from_directory(train_dir, L=4)
+    # print "Built tree!"
+    # vt.dump('vt4.pkl')
+    vt = VocabTree.load_from_file('vt4.pkl')
+    print "Done loading"
+    test_image = cv2.imread('test/image_03.jpeg')
     gray = cv2.cvtColor(test_image, cv2.COLOR_BGR2GRAY)
-    _, desc = sift.detectAndCompute(gray, None)
-    print vt.get_most_similar(desc)
+    kp, tdesc = sift.detectAndCompute(gray, None)
+    tfeat = np.array([k.pt for k in kp])
+    most_similar = vt.get_most_similar(tdesc)
+    best_im_name = ""
+    best_im = None
+    most_in = 0
+    best_rdesc = None
+    best_rfeat = None
+    best_hom = None
+    for train in most_similar:
+        train_image = cv2.imread(train_dir + os.sep + train)
+        gray = cv2.cvtColor(train_image, cv2.COLOR_BGR2GRAY)
+        kp, rdesc = sift.detectAndCompute(gray, None)
+        rfeat = np.array([k.pt for k in kp])
+        inl, hom = estimate_homography(rdesc, rfeat, tdesc, tfeat)
+        print inl
+        if inl > most_in:
+            most_in = inl
+            best_hom = hom
+            best_im_name = train
+            best_rdesc = rdesc
+            best_rfeat = rfeat
+            best_im = train_image
+
+    print best_im_name
+    im = visualize_transformation(test_image, best_hom, best_im.shape[0], best_im.shape[1])
+    im = cv2.putText(im, best_im_name, (5,100), cv2.FONT_HERSHEY_COMPLEX, 2, (255, 0, 0))
+    cv2.imwrite('full_vis.jpg', im)
+
     # first_image = cv2.imread('DVDcovers/' + images[0])
     # gray = cv2.cvtColor(first_image, cv2.COLOR_BGR2GRAY)
     # _, desc = sift.detectAndCompute(gray, None)

@@ -71,7 +71,7 @@ def compute_homography(rfeat, tfeat):
 
 
 
-def estimate_homography(rdesc, rfeat, tdesc, tfeat, num_iters=100, thresh=3.0):
+def estimate_homography(rdesc, rfeat, tdesc, tfeat, num_iters=1000, thresh=3.0):
     """ Estimate homography transformation from reference to test using RANSAC.
     :param rdesc: matrix of # of keypoints x 128 with descriptors for each feature in reference
     :param rfeat: matrix of # of keypoints x 2, values are x,y of each feature for reference
@@ -140,14 +140,17 @@ def estimate_homography(rdesc, rfeat, tdesc, tfeat, num_iters=100, thresh=3.0):
     return best_in, best_hom
 
 
-def visualize_transformation(im, hom, height, width, file_name, thickness=5):
+def visualize_transformation(im, hom, height, width, thickness=5):
     """ Visualize the homography transformation by taking the dvd cover and localizing it on test image.
-    args
+
     :param im: test image to overlay bounding box on
     :param hom: 3x3 homography transformation matrix
     :param height: height of dvd cover
     :param width: width of dvd cover
-    :param file_name: file to write resulting image to
+    :param thickness: The thickness of the line to draw
+
+    :return:
+        im: The image with bounding box drawn on it
     """
 
     # Compute the corner points
@@ -162,7 +165,8 @@ def visualize_transformation(im, hom, height, width, file_name, thickness=5):
     im = cv2.line(im, tuple(transf[1, :]), tuple(transf[2, :]), (255,0,0), thickness)
     im = cv2.line(im, tuple(transf[2, :]), tuple(transf[3, :]), (255,0,0), thickness)
     im = cv2.line(im, tuple(transf[3, :]), tuple(transf[0, :]), (255,0,0), thickness)
-    cv2.imwrite(file_name, im)
+
+    return im
 
 if __name__ == '__main__':
     img = cv2.imread('test/image_01.jpeg')
