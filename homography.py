@@ -1,8 +1,12 @@
+""" This file contains all functionality surrounding doing homography estimation. """
+
 import cv2
 import numpy as np
 import scipy.spatial.distance
 import cProfile
-""" This file contains all functionality surrounding doing homography estimation. """
+
+
+__author__ = 'Tal Friedman (talf301@gmail.com)'
 
 def do_matching(rdesc, tdesc):
     """ For each descriptor in rdesc, find the best matching descriptor in tdesc, and

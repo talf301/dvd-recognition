@@ -1,4 +1,5 @@
 from homography import estimate_homography, visualize_transformation
+import cProfile
 from sklearn.cluster import KMeans, MiniBatchKMeans
 import cv2
 import numpy as np
@@ -6,6 +7,9 @@ import scipy.spatial.distance
 from collections import Counter
 import os
 import pickle
+
+
+__author__ = 'Tal Friedman (talf301@gmail.com)'
 
 class VocabTree:
     """
@@ -18,7 +22,7 @@ class VocabTree:
     norm_ord: The order of the norm to use - generally either L1 or L2
     db_scores: number of images in database x number of nodes in tree matrix of score vectors for each training image
     """
-    def __init__(self, descs, labels, images, k=10, L=5, norm_ord=1):
+    def __init__(self, descs, labels, images, k=10, L=4, norm_ord=1):
         """
 
         :param descs: # of descs x 128 matrix of descriptors
@@ -116,7 +120,7 @@ class VocabTree:
         return vt
 
     @classmethod
-    def build_from_directory(cls, directory, k=10, L=5, norm_ord=1):
+    def build_from_directory(cls, directory, k=10, L=4, norm_ord=1):
         """
         Build a vocabulary tree using all jpg images from a training directory
 
@@ -182,10 +186,7 @@ class Node:
             scores. Root should be given an empty list here.
 
         """
-        if index % 1000 == 0:
-            print index
-            print depth
-            print len(labels)
+
         self.index = index
         self.depth = depth
 
@@ -207,7 +208,7 @@ class Node:
 
         # If we've reached the depth cap, or there aren't enough descriptors, this is a leaf node and there's no work
         if depth == L or labels.shape[0] < k:
-            self.centers = None
+            self.centers = []
             self.max_index = index
             return
 
@@ -226,18 +227,34 @@ class Node:
         # List of children
         self.children = []
 
+        # In case we need to delete
+        to_del = []
+
         # Recursively create nodes
         for i in range(k):
             # Don't want to use the same index again
             index += 1
+
             # Get the descriptors and corresponding labels belonging to this branch
             branch_descs = descs[branches==i, :]
             branch_labels = labels[branches==i]
+
+            # If there is nothing in this cluster, remove it
+            if branch_descs.shape[0] == 0:
+                to_del.append(i)
+                index -= 1
+                continue
+
             # Create the new node
             branch = Node(branch_descs, branch_labels, index, depth + 1, k, L, db_im_size, pre_scores)
             self.children.append(branch)
+
             # Keep track of our index properly
             index = branch.max_index
+
+        # Delete
+        if len(to_del) > 0:
+            self.centers = np.delete(self.centers, to_del, axis=0)
 
         self.max_index = index
 
@@ -255,7 +272,7 @@ class Node:
         scores[self.index] += descs.shape[0] * self.weight
 
         # If this is a leaf node, stop
-        if self.centers == None:
+        if len(self.centers) == 0:
             return
 
         # Figure out how to split the data
@@ -272,12 +289,13 @@ if __name__ == '__main__':
     # vt = VocabTree.build_from_directory(train_dir, L=4)
     # print "Built tree!"
     # vt.dump('vt4.pkl')
-    vt = VocabTree.load_from_file('vt4.pkl')
+    vt = VocabTree.load_from_file('vt5.pkl')
     print "Done loading"
-    test_image = cv2.imread('test/image_03.jpeg')
+    test_image = cv2.imread('test/image_02.jpeg')
     gray = cv2.cvtColor(test_image, cv2.COLOR_BGR2GRAY)
     kp, tdesc = sift.detectAndCompute(gray, None)
     tfeat = np.array([k.pt for k in kp])
+    cProfile.run('vt.get_most_similar(tdesc)')
     most_similar = vt.get_most_similar(tdesc)
     best_im_name = ""
     best_im = None
@@ -285,11 +303,13 @@ if __name__ == '__main__':
     best_rdesc = None
     best_rfeat = None
     best_hom = None
+    print most_similar
     for train in most_similar:
         train_image = cv2.imread(train_dir + os.sep + train)
         gray = cv2.cvtColor(train_image, cv2.COLOR_BGR2GRAY)
         kp, rdesc = sift.detectAndCompute(gray, None)
         rfeat = np.array([k.pt for k in kp])
+        # cProfile.run('estimate_homography(rdesc, rfeat, tdesc, tfeat)')
         inl, hom = estimate_homography(rdesc, rfeat, tdesc, tfeat)
         print inl
         if inl > most_in:
@@ -302,7 +322,7 @@ if __name__ == '__main__':
 
     print best_im_name
     im = visualize_transformation(test_image, best_hom, best_im.shape[0], best_im.shape[1])
-    im = cv2.putText(im, best_im_name, (5,100), cv2.FONT_HERSHEY_COMPLEX, 2, (255, 0, 0))
+    im = cv2.putText(im, best_im_name, (5,100), cv2.FONT_HERSHEY_COMPLEX, 1, (255, 0, 0))
     cv2.imwrite('full_vis.jpg', im)
 
     # first_image = cv2.imread('DVDcovers/' + images[0])
